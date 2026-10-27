@@ -1,6 +1,6 @@
 /* Service Worker: legt alle Dateien beim Installieren in einen versionierten Cache und liefert sie offline aus.
    Bei jeder inhaltlichen Änderung CACHE hochzählen, damit Geräte die neue Version laden. */
-const CACHE = 'patho-quiz-v21';
+const CACHE = 'patho-quiz-v22';
 const ART = [
   'microscope', 'shield', 'cells', 'heart', 'vessel', 'lungs', 'stomach', 'colon', 'liver', 'kidney', 'drop',
   'thyroid', 'ribbon', 'uterus', 'bone', 'brain', 'tooth', 'bolt', 'stopwatch', 'chart', 'trophy', 'medal',
@@ -38,7 +38,9 @@ const ASSETS = ART.concat([
 ]);
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache: 'reload' umgeht den HTTP-Cache (GitHub Pages: max-age=600), sonst landen alte Dateien im neuen Cache
+  const fresh = ASSETS.map(url => new Request(url, { cache: 'reload' }));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(fresh)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
