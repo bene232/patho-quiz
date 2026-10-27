@@ -1,6 +1,6 @@
 /* Service Worker: legt alle Dateien beim Installieren in einen versionierten Cache und liefert sie offline aus.
    Bei jeder inhaltlichen Änderung CACHE hochzählen, damit Geräte die neue Version laden. */
-const CACHE = 'patho-quiz-v20';
+const CACHE = 'patho-quiz-v21';
 const ART = [
   'microscope', 'shield', 'cells', 'heart', 'vessel', 'lungs', 'stomach', 'colon', 'liver', 'kidney', 'drop',
   'thyroid', 'ribbon', 'uterus', 'bone', 'brain', 'tooth', 'bolt', 'stopwatch', 'chart', 'trophy', 'medal',

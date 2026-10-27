@@ -168,7 +168,7 @@
     const link = $('.hero-link');
     ok(link && /4 Fehler wiederholen/.test(link.textContent), 'Hero bietet 4 Fehler an: ' + (link && link.textContent));
     ok(btn('Weiterlernen'), 'Hero-Button heißt jetzt „Weiterlernen“');
-    ok(/8\s*\/20/.test($('.hero .ring-label').textContent), 'Tagesziel-Ring 8/20: ' + $('.hero .ring-label').textContent);
+    ok(/8\s*\/300/.test($('.hero .ring-label').textContent), 'Tagesziel-Ring 8/300: ' + $('.hero .ring-label').textContent);
     cp('home-progress');
     link.click();
     await sleep(40);
@@ -272,8 +272,8 @@
     ok(document.documentElement.getAttribute('data-theme') === 'light', 'Hellmodus schaltbar');
     btn('System').click();
     ok(!document.documentElement.hasAttribute('data-theme'), 'Systemmodus');
-    btn('30').click();
-    ok(PQ.store.setting('dailyGoal') === 30, 'Tagesziel änderbar');
+    btn('400').click();
+    ok(PQ.store.setting('dailyGoal') === 400, 'Tagesziel änderbar');
     cp('settings');
     const pts = PQ.store.points();
     const code = PQ.store.exportCode();

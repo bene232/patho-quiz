@@ -372,7 +372,7 @@
 
   function renderHome() {
     const all = PQ.questions;
-    const goal = S.setting('dailyGoal') || 20;
+    const goal = S.setting('dailyGoal') || S.DEFAULT_GOAL;
     const today = S.todayCount();
     const mistakes = all.filter(q => S.isMistake(q.id)).length;
     const due = all.filter(q => S.isDue(q.id)).length;
@@ -1225,7 +1225,7 @@
     const attempts = states.reduce((a, s) => a + (s ? s.n : 0), 0);
     const hits = states.reduce((a, s) => a + (s ? s.c : 0), 0);
     const mistakes = all.filter(q => Q.mastery(q.id) === 'mistake').length;
-    const goal = S.setting('dailyGoal') || 20;
+    const goal = S.setting('dailyGoal') || S.DEFAULT_GOAL;
 
     // Woche: eine Reihe, heute hervorgehoben, Wert nur an heute und am Maximum
     const days = S.recentDays(7);
@@ -1384,7 +1384,7 @@
       h('h2', { class: 'label' }, 'Darstellung'),
       segmented([['auto', 'System'], ['light', 'Hell'], ['dark', 'Dunkel']], S.setting('theme'), v => { S.setting('theme', v); applyTheme(); }, 'Darstellung'),
       h('h2', { class: 'label' }, 'Tagesziel'),
-      segmented([[10, '10'], [20, '20'], [30, '30'], [50, '50']], S.setting('dailyGoal') || 20, v => S.setting('dailyGoal', v), 'Tagesziel'),
+      segmented(S.GOALS.map(g => [g, String(g)]), S.setting('dailyGoal') || S.DEFAULT_GOAL, v => S.setting('dailyGoal', v), 'Tagesziel'),
 
       h('h2', { class: 'label' }, 'Fortschritt übertragen'),
       h('div', { class: 'set-group' },

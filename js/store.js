@@ -7,9 +7,12 @@
   const DAY = 86400000;
   // Wiedervorlage in Tagen je Box: Box 1 sofort, Box 2 nach 1 Tag, … Box 5 nach 21 Tagen
   const INTERVAL_DAYS = [0, 0, 1, 3, 7, 21];
+  // Wählbare Tagesziele; ein gespeicherter Wert außerhalb davon (früher 10–50) wird auf den Standard gesetzt
+  const GOALS = [100, 200, 300, 400];
+  const DEFAULT_GOAL = 300;
 
   function blank() {
-    return { v: 1, q: {}, days: {}, points: 0, settings: { theme: 'auto', dailyGoal: 20 }, prefs: {} };
+    return { v: 1, q: {}, days: {}, points: 0, settings: { theme: 'auto', dailyGoal: DEFAULT_GOAL }, prefs: {} };
   }
 
   function load() {
@@ -18,7 +21,9 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         const base = blank();
-        return Object.assign(base, parsed, { settings: Object.assign(base.settings, parsed.settings) });
+        const loaded = Object.assign(base, parsed, { settings: Object.assign(base.settings, parsed.settings) });
+        if (GOALS.indexOf(loaded.settings.dailyGoal) < 0) loaded.settings.dailyGoal = DEFAULT_GOAL;
+        return loaded;
       }
     } catch (e) { /* privater Modus o. Ä. – dann ohne Speicherung */ }
     return blank();
@@ -164,6 +169,7 @@
   PQ.store = {
     get, record, isMistake, isDue, streak, recentDays, todayCount,
     points: () => state.points,
+    GOALS, DEFAULT_GOAL,
     exportData, exportCode, importData, reset, setting, pref,
     saveSession, loadSession
   };
