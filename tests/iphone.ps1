@@ -8,7 +8,7 @@
 param(
   [string]$OutDir = (Join-Path $env:TEMP 'patho-iphone'),
   [string[]]$Shots = @('home-empty', 'practice-setup', 'quiz-single', 'quiz-kprim', 'quiz-match', 'quiz-tf', 'feedback-match-wrong',
-    'result', 'chapter', 'exam-setup', 'exam-grid', 'blitz', 'stats', 'settings'),
+    'result', 'chapter', 'chapter-pick', 'quiz-menu', 'exam-setup', 'exam-grid', 'blitz', 'stats', 'settings'),
   [ValidateSet('light', 'dark')][string]$Theme = 'light',
   [switch]$NoNotch,
   [int]$Port = 9333

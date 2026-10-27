@@ -224,7 +224,7 @@ h1, h2, h3, p { margin: 0; }
 .btn-xl { text-transform: uppercase; letter-spacing: .06em; font-size: 15px; min-height: 54px; }
 .btn-block { width: 100%; }
 .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 0 var(--accent-shade); }
-.btn-primary:disabled { background: var(--line); color: var(--text-3); box-shadow: 0 4px 0 var(--line-strong); }
+.btn-primary:disabled, .btn-chapter:disabled { background: var(--line); color: var(--text-3); box-shadow: 0 4px 0 var(--line-strong); }
 .btn-soft { background: var(--bg); color: var(--text-2); border: 2px solid var(--line); box-shadow: 0 4px 0 var(--line); }
 .btn-soft:disabled { opacity: .45; }
 .btn-ok { background: var(--ok); color: #fff; box-shadow: 0 4px 0 var(--ok-shade); }
@@ -362,7 +362,8 @@ h1, h2, h3, p { margin: 0; }
   display: grid; place-items: center; border: 2px solid var(--line-strong); color: transparent;
 }
 .ch-chip-check .ico, .checkbox .ico { width: 15px; height: 15px; stroke-width: 3.6; }
-.ch-chip.on .ch-chip-check, .pick-main.on .checkbox { background: var(--c); border-color: var(--c); color: #fff; }
+.ch-chip.on .ch-chip-check, .pick-main.on .checkbox, .topic-pick.on .checkbox { background: var(--c); border-color: var(--c); color: #fff; }
+.topic-pick .checkbox { margin-right: 4px; }
 .pick-main.partial .checkbox { border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, var(--bg)); }
 
 .pick-ch { border: 2px solid var(--line); border-radius: 18px; }
@@ -388,6 +389,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .combo { display: inline-flex; align-items: center; gap: 2px; min-width: 40px; font-weight: 900; font-size: 16px; color: var(--flame); }
 .combo.hidden { visibility: hidden; }
+.q-count { flex: none; font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text-3); }
 .timer { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text-2); }
 .timer .ico { width: 18px; height: 18px; }
 .timer.low { color: var(--bad-ink); }
@@ -662,6 +664,19 @@ h1, h2, h3, p { margin: 0; }
 }
 .steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 
+/* ---------- Menü „Runde unterbrechen“ ---------- */
+.menu-wrap {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(15, 13, 30, .45); animation: fade .2s ease;
+}
+.menu {
+  width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 12px;
+  padding: 22px 16px calc(var(--safe-bottom) + 16px);
+  background: var(--bg); border-radius: 24px 24px 0 0; animation: slideup .25s ease;
+}
+.menu-title { font-size: 20px; font-weight: 900; }
+
 /* ---------- Toast & Konfetti ---------- */
 .toast {
   position: fixed; left: 50%; top: calc(var(--safe-top) + 14px); z-index: 50;
@@ -679,6 +694,7 @@ h1, h2, h3, p { margin: 0; }
 @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.03); } 100% { transform: scale(1); } }
 @keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
 @keyframes slideup { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes fade { from { opacity: 0; } }
 @keyframes bounce { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
 
 @media (min-width: 560px) {

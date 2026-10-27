@@ -284,13 +284,24 @@
     S.saveSession(session);
   }
 
+  // Nur die Fragen an den Positionen idxs behalten
+  function keepOnly(s, idxs) {
+    ['ids', 'views', 'responses', 'results'].forEach(k => { s[k] = idxs.map(i => s[k][i]); });
+  }
+
+  function answeredCount(s) {
+    return s.mode === 'exam'
+      ? s.ids.filter((id, i) => Q.isComplete(PQ.byId[id], s.responses[i])).length
+      : s.results.filter(r => r !== null).length;
+  }
+
   function restoreSession() {
     if (session) return session;
     const saved = S.loadSession();
     if (!saved || !Array.isArray(saved.ids)) return null;
     const keep = saved.ids.map((id, i) => (PQ.byId[id] ? i : -1)).filter(i => i >= 0);
     if (!keep.length) { S.saveSession(null); return null; }
-    ['ids', 'views', 'responses', 'results'].forEach(k => { saved[k] = keep.map(i => saved[k][i]); });
+    keepOnly(saved, keep);
     saved.idx = Math.min(saved.idx, saved.ids.length - 1);
     session = saved;
     return session;
@@ -298,6 +309,10 @@
 
   function startSession(mode, questions, extra) {
     if (!questions.length) { toast('Keine passenden Fragen gefunden'); return; }
+    // Angefangene Runde nicht stillschweigend überschreiben
+    const open = restoreSession();
+    const done = open ? answeredCount(open) : 0;
+    if (done && !confirm('Du hast noch eine offene Runde (' + MODE_TITLE[open.mode] + ' ' + done + '/' + open.ids.length + '). Verwerfen und neu starten?')) return;
     session = Q.createSession(mode, questions, extra);
     persist();
     go(mode === 'blitz' ? '#/blitz-play' : '#/quiz');
@@ -315,16 +330,19 @@
     startSession('practice', Q.take(Q.prioritize(PQ.questions.filter(q => q.sec === sec)), 12), { origin: { kind: 'section', sec } });
   }
 
-  function startChapter(id, altOnly) {
-    const pool = PQ.questions.filter(q => q.chapter === id && (!altOnly || q.alt));
-    startSession('practice', Q.take(Q.prioritize(pool), 15), { origin: { kind: 'chapter', id, altOnly: !!altOnly } });
+  // o = { id, sections, count, order, altOnly, openOnly }; fehlende Angaben (auch aus älteren Runden): alle Themen, alle Fragen
+  function startChapter(o) {
+    const valid = PQ.chapters.find(c => c.id === o.id).sections.map(s => s.id);
+    const sections = (o.sections || valid).filter(id => valid.includes(id));
+    const qs = Q.take(Q.prioritize(Q.filter({ sections, types: ALL_TYPES, altOnly: o.altOnly, openOnly: o.openOnly })), o.count);
+    startSession('practice', o.order === 'topics' ? Q.bySection(qs) : qs, { origin: Object.assign({}, o, { kind: 'chapter' }) });
   }
 
   // „Weiter“ auf der Auswertung: dieselbe Art Runde noch einmal
   const AGAIN = {
     smart: { label: 'Nächste Lektion', run: startSmart },
     section: { label: 'Noch eine Runde', run: o => startSection(o.sec) },
-    chapter: { label: 'Noch eine Runde', run: o => startChapter(o.id, o.altOnly) },
+    chapter: { label: 'Noch eine Runde', run: startChapter },
     custom: { label: 'Neue Runde', run: () => go('#/practice') },
     exam: { label: 'Neue Klausur', run: () => go('#/exam') },
     blitz: { label: 'Noch eine Runde', run: () => go('#/blitz') },
@@ -346,6 +364,9 @@
         s.results[i] = res;
         S.record(id, res.correct, Q.points(res.score));
       });
+    } else {
+      // Vorzeitig beendet: nur die beantworteten Fragen auswerten
+      keepOnly(s, s.ids.map((id, i) => i).filter(i => s.results[i] !== null));
     }
     s.ended = Date.now();
     lastResult = s;
@@ -387,13 +408,10 @@
 
     const actions = [];
     if (saved) {
-      const n = saved.mode === 'exam'
-        ? saved.ids.filter((id, i) => Q.isComplete(PQ.byId[id], saved.responses[i])).length
-        : saved.results.filter(r => r !== null).length;
       actions.push(
         h('button', { class: 'btn btn-hero', onclick: () => go(saved.mode === 'blitz' ? '#/blitz-play' : '#/quiz') }, icon('play'), 'Fortsetzen'),
         h('button', { class: 'hero-link', onclick: () => { abortSession(); renderHome(); } },
-          MODE_TITLE[saved.mode] + ' ' + n + '/' + saved.ids.length + ' · verwerfen'));
+          MODE_TITLE[saved.mode] + ' ' + answeredCount(saved) + '/' + saved.ids.length + ' · verwerfen'));
     } else {
       actions.push(h('button', { class: 'btn btn-hero', onclick: startSmart }, icon('play'), today ? 'Weiterlernen' : 'Los geht’s'));
       if (mistakes + due) {
@@ -453,29 +471,95 @@
     const qs = PQ.questions.filter(q => q.chapter === id);
     const p = Q.progress(qs);
     const altCount = qs.filter(q => q.alt).length;
+    const secIds = ch.sections.map(s => s.id);
 
-    const topics = h('div', { class: 'topics' }, ch.sections.map(s => {
+    // Zuletzt gestartete Auswahl dieses Kapitels; Standard: alle Themen, alle Fragen, gemischt
+    const saved = (S.pref('chapter') || {})[id] || {};
+    const sel = new Set((saved.sections || secIds).filter(s => secIds.includes(s)));
+    let count = saved.count === undefined ? 0 : saved.count;
+    let order = saved.order || 'mix';
+    const only = new Set(['openOnly', 'altOnly'].filter(k => saved[k] && (k !== 'altOnly' || altCount)));
+    const opts = () => ({
+      id, sections: secIds.filter(s => sel.has(s)), count, order,
+      altOnly: only.has('altOnly'), openOnly: only.has('openOnly')
+    });
+    const matching = sections => Q.filter({ sections, types: ALL_TYPES, altOnly: only.has('altOnly'), openOnly: only.has('openOnly') }).length;
+
+    const startBtn = h('button', { class: 'btn btn-chapter btn-block btn-xl', onclick: start }, icon('play'), 'Starten');
+    const summary = h('p', { class: 'setup-summary' });
+    const allBtn = h('button', {
+      class: 'link',
+      onclick: () => {
+        const allOn = sel.size === secIds.length;
+        secIds.forEach(s => (allOn ? sel.delete(s) : sel.add(s)));
+        update();
+      }
+    });
+
+    const rows = ch.sections.map(s => {
       const sq = qs.filter(q => q.sec === s.id);
       const sp = Q.progress(sq);
-      return h('button', { class: 'topic', onclick: () => startSection(s.id) },
+      const countEl = h('span', {});
+      const btn = h('button', {
+        class: 'topic topic-pick',
+        onclick: () => {
+          if (sel.has(s.id)) sel.delete(s.id); else sel.add(s.id);
+          update();
+        }
+      },
         ring(sp.pct, 'sm', ch.color, sp.pct === 100 ? icon('check') : false),
         h('span', { class: 'grow' },
           h('span', { class: 'topic-title' }, s.title),
-          h('span', { class: 'topic-meta' }, s.id + ' · ' + sq.length + ' Fragen', s.stars ? ' · ' : null, stars(s.stars))),
-        h('span', { class: 'topic-go' }, icon('play')));
-    }));
+          h('span', { class: 'topic-meta' }, s.id + ' · ', countEl, s.stars ? ' · ' : null, stars(s.stars))),
+        h('span', { class: 'checkbox' }, icon('check')));
+      return { s, btn, countEl, total: sq.length };
+    });
 
-    mount(h('main', { class: 'screen chapter', style: '--c:' + ch.color },
+    function update() {
+      rows.forEach(r => {
+        const on = sel.has(r.s.id);
+        const n = matching([r.s.id]);
+        r.btn.classList.toggle('on', on);
+        r.btn.setAttribute('aria-pressed', String(on));
+        r.countEl.textContent = (n < r.total ? n + ' von ' : '') + plural(r.total, 'Frage', 'Fragen');
+      });
+      allBtn.textContent = sel.size === secIds.length ? 'Alle abwählen' : 'Alle auswählen';
+      const n = matching(opts().sections);
+      const k = count ? Math.min(count, n) : n;
+      startBtn.disabled = n === 0;
+      summary.textContent = !sel.size ? 'Bitte mindestens ein Thema wählen'
+        : n ? plural(k, 'Frage', 'Fragen') + (k < n ? ' von ' + n : '')
+          : only.has('openOnly') ? 'Keine offenen Fragen in der Auswahl' : 'Keine Fragen passen zur Auswahl';
+    }
+
+    function start() {
+      const o = opts();
+      const all = S.pref('chapter') || {};
+      all[id] = { sections: o.sections, count, order, altOnly: o.altOnly, openOnly: o.openOnly };
+      S.pref('chapter', all);
+      startChapter(o);
+    }
+
+    const filters = [['openOnly', 'Nur offene']].concat(altCount ? [['altOnly', 'Nur Altfragen (' + altCount + ')']] : []);
+
+    mount(h('main', { class: 'screen chapter has-footer', style: '--c:' + ch.color },
       topbar(''),
       h('section', { class: 'ch-hero' },
         art(ch.art, 'art-hero'),
         h('h1', { class: 'ch-hero-title' }, ch.short),
         h('p', { class: 'ch-hero-sub' }, plural(qs.length, 'Frage', 'Fragen') + ' · ' + p.pct + ' % sitzen', ch.stars ? ' · ' : null, stars(ch.stars)),
         h('span', { class: 'ch-hero-bar' }, h('span', { style: 'width:' + p.pct + '%' }))),
-      h('button', { class: 'btn btn-chapter btn-block btn-xl', onclick: () => startChapter(id) }, icon('play'), 'Kapitel üben'),
-      h('h2', { class: 'h2' }, 'Themen'),
-      topics,
-      altCount ? h('button', { class: 'btn btn-soft btn-block', onclick: () => startChapter(id, true) }, art('scroll', 'art-xs'), 'Nur Altfragen (' + altCount + ')') : null));
+      h('div', { class: 'row-head' }, h('h2', { class: 'h2' }, 'Themen'), allBtn),
+      h('div', { class: 'topics' }, rows.map(r => r.btn)),
+      h('h2', { class: 'label' }, 'Anzahl'),
+      segmented([[10, '10'], [25, '25'], [50, '50'], [0, 'Alle']], count, v => { count = v; update(); }, 'Anzahl'),
+      h('h2', { class: 'label' }, 'Reihenfolge'),
+      segmented([['mix', 'Gemischt'], ['topics', 'Nach Themen']], order, v => { order = v; }, 'Reihenfolge'),
+      h('h2', { class: 'label' }, 'Auswahl'),
+      chipGroup(filters, only, update),
+      h('p', { class: 'note' }, 'Offen = neu oder zuletzt falsch beantwortet.'),
+      h('footer', { class: 'footer footer-col' }, summary, startBtn)));
+    update();
   }
 
   /* ================= Einstellungen der Modi ================= */
@@ -909,6 +993,28 @@
         h('button', { class: 'btn btn-block btn-xl btn-' + (tone === 'ok' ? 'ok' : tone === 'part' ? 'warn' : 'bad'), onclick: onNext }, nextLabel)));
   }
 
+  // Hinter dem X (Üben, Wiederholen, Blitzrunde): auswerten, pausieren oder weitermachen
+  function exitMenu(s) {
+    const n = answeredCount(s);
+    const prevKey = keyHandler;
+    const close = () => { wrap.remove(); keyHandler = prevKey; };
+    const wrap = h('div', { class: 'menu-wrap', onclick: e => { if (e.target === wrap) close(); } },
+      h('div', { class: 'menu', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'menu-title' },
+        h('h2', { class: 'menu-title', id: 'menu-title' }, 'Runde unterbrechen?'),
+        h('p', { class: 'muted small' }, n
+          ? n + ' von ' + plural(s.ids.length, 'Frage', 'Fragen') + ' beantwortet. Die Antworten sind schon gespeichert.'
+          : 'Noch keine Frage beantwortet.'),
+        n
+          ? h('button', { class: 'btn btn-primary btn-block btn-xl', onclick: () => finishSession() }, 'Beenden und auswerten')
+          : h('button', { class: 'btn btn-primary btn-block btn-xl', onclick: () => { abortSession(); go('#/'); } }, 'Runde beenden'),
+        h('button', { class: 'btn btn-soft btn-block', onclick: () => go('#/') }, 'Pause – später fortsetzen'),
+        h('button', { class: 'link link-center', onclick: close }, 'Weiterüben')));
+    // In #app, damit der nächste Bildschirm (mount) das Menü mit entfernt
+    root.append(wrap);
+    keyHandler = e => { if (e.key === 'Escape') close(); };
+    wrap.querySelector('.btn').focus();
+  }
+
   /* ================= Quiz (Üben, Wiederholen, Klausur) ================= */
 
   function renderQuiz() {
@@ -947,11 +1053,12 @@
       h('button', {
         class: 'icon-btn', 'aria-label': 'Runde beenden',
         onclick: () => {
-          const msg = exam ? 'Klausur abbrechen? Deine Antworten gehen verloren.' : 'Runde beenden? Beantwortete Fragen bleiben gespeichert.';
-          if (confirm(msg)) { abortSession(); go('#/'); }
+          if (!exam) exitMenu(s);
+          else if (confirm('Klausur abbrechen? Deine Antworten gehen verloren.')) { abortSession(); go('#/'); }
         }
       }, icon('x')),
       h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(total), 'aria-valuenow': String(doneCount()) }, bar),
+      h('span', { class: 'q-count', 'aria-label': 'Frage ' + (s.idx + 1) + ' von ' + total }, (s.idx + 1) + '/' + total),
       exam ? timeEl : combo,
       exam ? h('button', { class: 'icon-btn', 'aria-label': 'Fragenübersicht', onclick: () => { navGrid.hidden = !navGrid.hidden; } }, icon('grid')) : null);
 
@@ -1073,9 +1180,10 @@
     const head = h('header', { class: 'quiz-top' },
       h('button', {
         class: 'icon-btn', 'aria-label': 'Runde beenden',
-        onclick: () => { if (confirm('Blitzrunde beenden?')) { abortSession(); go('#/'); } }
+        onclick: () => exitMenu(s)
       }, icon('x')),
       h('div', { class: 'progress' }, h('span', { style: 'width:' + (done / total) * 100 + '%' })),
+      h('span', { class: 'q-count', 'aria-label': 'Aussage ' + (s.idx + 1) + ' von ' + total }, (s.idx + 1) + '/' + total),
       h('span', { class: 'combo' }, icon('flame', 'ico-flame'), h('b', {}, s.combo)));
 
     function nextCard() {

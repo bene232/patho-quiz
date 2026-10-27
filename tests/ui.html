@@ -188,25 +188,81 @@
     ok(btn('Nächste Lektion'), 'Auswertung bietet „Nächste Lektion“');
     ok($('.confetti'), 'Konfetti bei 100 %');
 
-    /* ---------- Kapitelseite ---------- */
+    /* ---------- Kapitelseite: Themen, Anzahl, Reihenfolge ---------- */
+    const herz = PQ.questions.filter(q => q.chapter === 4);
+    const summary = () => $('.setup-summary').textContent;
+    const seg = text => $$('.seg-btn').find(b => b.textContent === text);
     await nav('#/chapter/4');
     ok($('.ch-hero-title').textContent === 'Herz' && $$('.topic').length === 9, 'Kapitel Herz mit 9 Themen');
-    ok(btn('Nur Altfragen'), 'Altfragen-Button');
+    ok($$('.topic.on').length === 9 && seg('Alle').classList.contains('on') && seg('Gemischt').classList.contains('on'), 'Standard: alle Themen, alle Fragen, gemischt');
+    ok(summary() === herz.length + ' Fragen', 'Ganzes Kapitel: ' + summary());
+    ok(btn('Nur offene') && btn('Nur Altfragen ('), 'Filter „Nur offene“ und „Nur Altfragen“');
     await imgsOk('Kapitelseite');
     cp('chapter');
+    btn('Alle abwählen').click();
+    ok(summary() === 'Bitte mindestens ein Thema wählen' && btn('Starten').disabled, 'Ohne Thema kein Start');
+    $$('.topic')[1].click();
     $$('.topic')[7].click();
+    const two = herz.filter(q => q.sec === '4.2' || q.sec === '4.8').length;
+    ok(summary() === two + ' Fragen' && btn('Alle auswählen'), 'Themen 4.2 + 4.8: ' + summary());
+    seg('25').click();
+    seg('Nach Themen').click();
+    ok(summary() === '25 Fragen von ' + two, 'Anzahl 25: ' + summary());
+    cp('chapter-pick');
+    btn('Starten').click();
     await sleep(40);
-    ok(session().origin.kind === 'section' && session().ids.every(id => PQ.byId[id].sec === '4.8'), 'Thema 4.8 gestartet');
+    const secs = session().ids.map(id => PQ.byId[id].sec);
+    ok(session().origin.kind === 'chapter' && secs.length === 25 && secs.every(x => x === '4.2' || x === '4.8'), '25 Fragen aus 4.2 + 4.8 gestartet');
+    ok(secs.join() === secs.slice().sort().join(), 'Nach Themen: erst 4.2, dann 4.8');
+    ok($('.q-count').textContent === '1/25', 'Zähler 1/25');
 
-    /* ---------- Fortsetzen ---------- */
+    /* ---------- X: weiterüben, pausieren, vorzeitig auswerten ---------- */
+    await playThrough(3, true);
+    ok($('.q-count').textContent === '4/25', 'Zähler nach 3 Antworten: 4/25');
+    $('.quiz-top .icon-btn').click();
+    await sleep(10);
+    ok($('.menu') && /3 von 25 Fragen beantwortet/.test($('.menu').textContent), 'Menü: 3 von 25 beantwortet');
+    cp('quiz-menu');
+    btn('Weiterüben').click();
+    ok(!$('.menu') && location.hash === '#/quiz', 'Weiterüben schließt das Menü');
+    $('.quiz-top .icon-btn').click();
+    btn('Pause').click();
+    await sleep(30);
+    ok(location.hash === '#/' && PQ.store.loadSession() && btn('Fortsetzen') && /Üben 3\/25/.test($('.hero-link').textContent), 'Pause: Startseite bietet Fortsetzen (Üben 3/25)');
+
+    window.confirm = () => false;
+    await nav('#/chapter/4');
+    ok($$('.topic.on').length === 2 && seg('25').classList.contains('on') && seg('Nach Themen').classList.contains('on'), 'Kapitelseite merkt sich die Auswahl');
+    const before = session().ids.join();
+    btn('Starten').click();
+    await sleep(30);
+    ok(session().ids.join() === before && location.hash === '#/chapter/4', 'Offene Runde wird nicht ohne Rückfrage überschrieben');
+    window.confirm = () => true;
+
     await nav('#/');
-    ok(btn('Fortsetzen'), 'Unterbrochene Runde wird angeboten');
     btn('Fortsetzen').click();
     await sleep(30);
-    ok(location.hash === '#/quiz' && cur().sec === '4.8', 'Fortsetzen öffnet die Runde');
+    ok(location.hash === '#/quiz' && $('.q-count').textContent === '4/25', 'Fortsetzen öffnet die Runde bei Frage 4');
     $('.quiz-top .icon-btn').click();
+    btn('Beenden und auswerten').click();
+    await sleep(40);
+    ok(location.hash === '#/result' && $('.rstat-val').textContent === '3/3' && !PQ.store.loadSession(), 'Vorzeitig beendet: Auswertung der 3 beantworteten Fragen');
+    btn('Antworten ansehen').click();
+    ok($$('.res-row').length === 3, '3 Antworten gelistet');
+
+    /* ---------- Nur offene Fragen ---------- */
+    await nav('#/chapter/4');
+    btn('Nur offene').click();
+    const openTwo = PQ.quiz.filter({ sections: ['4.2', '4.8'], types: ['single', 'kprim', 'match', 'tf'], openOnly: true }).length;
+    const k = Math.min(25, openTwo);
+    ok(openTwo <= two - 3 && summary() === k + ' Fragen' + (k < openTwo ? ' von ' + openTwo : ''), 'Nur offene: ' + summary());
+    btn('Starten').click();
+    await sleep(40);
+    ok(session().ids.length === k && session().ids.every(id => PQ.quiz.isOpen(id)), 'Runde enthält nur offene Fragen');
+    $('.quiz-top .icon-btn').click();
+    btn('Runde beenden').click();
     await sleep(30);
-    ok(!PQ.store.loadSession(), 'Abbrechen verwirft die Runde');
+    ok(!PQ.store.loadSession() && location.hash === '#/', 'Ohne Antwort: „Runde beenden“ verwirft die Runde');
 
     /* ---------- Klausur ---------- */
     PQ.store.pref('exam', { chapters: [4, 5], count: 20, perQ: 90 });
@@ -335,6 +391,34 @@
     pe('pointerup', $$('.term')[4], ox, oy - 300, 'mouse');
     await sleep(20);
     ok(!$('.drag-ghost') && $$('.target').every(t => !$('.slot', t).textContent.includes('5')) && outside, 'Ablegen daneben ändert nichts');
+    $('.quiz-top .icon-btn').click();
+    btn('Runde beenden').click();
+    await sleep(30);
+
+    /* ---------- Speicherstand und offene Runde der Vorversion ---------- */
+    const oldState = {
+      v: 1, points: 120, days: { '2026-10-26': 40 },
+      q: { 'k4-01': { b: 3, d: 0, n: 2, c: 2, l: 1, t: 1 }, 'k6-01': { b: 1, d: 0, n: 1, c: 0, l: 0, t: 2 } },
+      settings: { theme: 'auto', dailyGoal: 300 },
+      prefs: { practice: { sections: ['4.1'], types: ['single'], count: 20 } }
+    };
+    PQ.store.importData(JSON.stringify(oldState));
+    // Kapitelrunde, wie die Vorversion sie gespeichert hat (ohne Themen/Anzahl im origin)
+    PQ.store.saveSession(PQ.quiz.createSession('practice', ['k4-03', 'k4-04'].map(id => PQ.byId[id]), { origin: { kind: 'chapter', id: 4, altOnly: false } }));
+    await nav('#/chapter/4');
+    ok($$('.topic.on').length === 9 && summary() === herz.length + ' Fragen', 'Ohne gespeicherte Kapitel-Auswahl: alle Themen, alle Fragen');
+    await nav('#/');
+    ok(btn('Fortsetzen') && /Üben 0\/2/.test($('.hero-link').textContent), 'Offene Runde der Vorversion wird angeboten');
+    btn('Fortsetzen').click();
+    await sleep(30);
+    await playThrough(2, true);
+    ok(location.hash === '#/result' && $('.rstat-val').textContent === '2/2', 'Runde der Vorversion lässt sich zu Ende spielen');
+    btn('Noch eine Runde').click();
+    await sleep(40);
+    ok(session().origin.kind === 'chapter' && session().ids.length === herz.length, '„Noch eine Runde“ startet das ganze Kapitel');
+    const kept = JSON.parse(PQ.store.exportData()).data;
+    ok(kept.q['k4-01'].b === 3 && kept.q['k6-01'].b === 1 && kept.points === 140 && kept.days['2026-10-26'] === 40 &&
+      kept.prefs.practice.count === 20 && kept.settings.dailyGoal === 300, 'Lernstand der Vorversion bleibt erhalten');
   } catch (e) {
     if (e !== 'STOP') { fails++; lines.push('FAIL Abbruch: ' + (e && e.stack || e)); }
   }

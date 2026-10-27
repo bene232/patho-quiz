@@ -21,11 +21,13 @@
     return order;
   }
 
-  function filter({ sections, types, altOnly, minStars }) {
+  // openOnly: nur Fragen, die noch nicht sitzen (neu oder zuletzt falsch)
+  function filter({ sections, types, altOnly, minStars, openOnly }) {
     const secs = new Set(sections);
     const typeSet = new Set(types);
     return PQ.questions.filter(q =>
-      secs.has(q.sec) && typeSet.has(q.type) && (!altOnly || q.alt) && (q.stars || 0) >= (minStars || 0));
+      secs.has(q.sec) && typeSet.has(q.type) && (!altOnly || q.alt) && (q.stars || 0) >= (minStars || 0) &&
+      (!openOnly || isOpen(q.id)));
   }
 
   // Offene Fehler zuerst, dann Neues und Fälliges gemischt, zuletzt der Rest.
@@ -45,6 +47,13 @@
     return count ? list.slice(0, count) : list;
   }
 
+  // „Nach Themen“: Abschnitte in Skript-Reihenfolge, innerhalb eines Abschnitts bleibt die Reihenfolge erhalten
+  function bySection(list) {
+    const pos = {};
+    PQ.chapters.flatMap(c => c.sections).forEach((s, i) => { pos[s.id] = i; });
+    return list.slice().sort((a, b) => pos[a.sec] - pos[b.sec]);
+  }
+
   function reviewPool() {
     const now = Date.now();
     const mistakes = PQ.questions.filter(q => PQ.store.isMistake(q.id))
@@ -60,6 +69,11 @@
     if (!s) return 'new';
     if (s.b === 1) return 'mistake';
     return s.b >= 4 ? 'solid' : 'learning';
+  }
+
+  function isOpen(id) {
+    const m = mastery(id);
+    return m === 'new' || m === 'mistake';
   }
 
   // pct = Anteil der Fragen, deren letzte Antwort richtig war („sitzt“)
@@ -145,5 +159,5 @@
     return Math.round(score * 10);
   }
 
-  PQ.quiz = { TYPE_LABEL, shuffle, filter, prioritize, take, reviewPool, mastery, progress, smartLesson, createSession, isComplete, evaluate, points };
+  PQ.quiz = { TYPE_LABEL, shuffle, filter, prioritize, take, bySection, reviewPool, mastery, isOpen, progress, smartLesson, createSession, isComplete, evaluate, points };
 })();

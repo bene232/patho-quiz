@@ -133,6 +133,12 @@
   ok(s3.length > 0 && s3.every(q => q.stars === 3), 'Filter „Nur ★★★“');
   const onlyKp = Q.filter({ sections: ['4.2'], types: ['kprim'] });
   ok(onlyKp.length > 0 && onlyKp.every(q => q.sec === '4.2' && q.type === 'kprim'), 'Filter Abschnitt + Typ');
+  const order4 = PQ.chapters.find(c => c.id === 4).sections.map(s => s.id);
+  const bs = Q.bySection(Q.shuffle(PQ.questions.filter(q => q.chapter === 4)));
+  ok(bs.length === PQ.questions.filter(q => q.chapter === 4).length &&
+    bs.every((q, i) => i === 0 || order4.indexOf(bs[i - 1].sec) <= order4.indexOf(q.sec)), '„Nach Themen“: Abschnitte in Skript-Reihenfolge');
+  const cross = Q.bySection([PQ.byId['k10-01'], PQ.byId['k9-01']]);
+  ok(cross[0].id === 'k9-01', '„Nach Themen“: Kapitel 9 vor 10 (nicht alphabetisch)');
 
   let identical = 0;
   for (let i = 0; i < 200; i++) {
@@ -169,6 +175,9 @@
   ok(pool.length === 1 && pool[0].id === 'k4-02', 'Wiederholen enthält offene Fehler');
   const prio = Q.prioritize(PQ.questions.filter(q => q.chapter === 4));
   ok(prio[0].id === 'k4-02', 'Üben: offene Fehler zuerst');
+  const open = Q.filter({ sections: allSecs, types: ['single', 'kprim', 'match', 'tf'], openOnly: true });
+  ok(open.length === PQ.questions.length - 1 && !open.some(q => q.id === id) && open.some(q => q.id === 'k4-02'),
+    'Filter „Nur offene“: neu + Fehler, ohne Gesessenes');
 
   const code = S.exportCode();
   const file = S.exportData();
